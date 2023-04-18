@@ -1,0 +1,7 @@
+.ccls-cache
+vncscreenshot
+client/vncjew-client
+server/screenshots
+server/novnc
+server/database.sqlite3
+server/vncjew

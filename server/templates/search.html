@@ -1,0 +1,39 @@
+{{template "header"}}
+
+<title>Search - VNCJew</title>
+
+<style>
+ img {
+     width: 100%;
+ }
+ .imageGrid {
+     -webkit-column-count: 4;
+     -moz-column-count: 4;
+     column-count: 4;
+     -webkit-column-width: 400px;
+     -moz-column-width: 400px;
+     column-width: 400px;
+ }
+</style>
+
+{{template "body"}}
+
+<hr>
+<div class="imageGrid">
+    {{range $s := .results}}
+    <a href="/host/{{$s.HostIp}}#{{$s.Port}}">
+        <img src="/screenshots/{{$s.HostIp}}_{{$s.Port}}.jpeg" alt="{{$s.HostIp}}:{{$s.Port}}">
+    </a>
+    {{end}}
+</div>
+
+<hr>
+<form action="/search">
+    <input type="hidden" name="query" value="{{.query}}">
+    <input type="hidden" name="offset" value="{{.next}}">
+    <input type="submit" value="Next">
+    <label for="amt">Amount</label>
+    <input type="text" name="amt" value="{{.amt}}">
+</form>
+
+{{template "footer"}}

@@ -1,0 +1,25 @@
+{{template "header"}}
+
+<title>Status - VNCJew</title>
+
+{{template "body"}}
+
+<ul>
+{{range $s := .clients}}
+    <li>
+        {{$s.RemoteAddr}}: {{$s.Response}}
+        <form action="scan" method="POST">
+            <label for="args">Args:</label>
+            <input type="text" name="args">
+            <input type="hidden" name="client" value="{{$s.RemoteAddr}}">
+            <input type="submit" value="Scan">
+        </form>
+        <form action="stop" method="POST">
+            <input type="hidden" name="client" value="{{$s.RemoteAddr}}">
+            <input type="submit" value="Stop">
+        </form>
+    </li>
+{{end}}
+</ul>
+
+{{template "footer"}}

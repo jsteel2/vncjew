@@ -1,0 +1,85 @@
+{{template "header"}}
+
+<title>{{.host.Ip}} - VNCJew</title>
+<style>
+ .service {
+     display: flex;
+     align-items: left;
+     margin-bottom: 20px;
+ }
+ pre {
+     white-space: pre-wrap;
+     white-space: -moz-pre-wrap;
+     white-space: -pre-wrap;
+     white-space: -o-pre-wrap;
+     word-wrap: break-word;
+     word-break: break-all;
+ }
+ img {
+     max-width: 1024px;
+     align-self: start;
+ }
+</style>
+
+{{template "body"}}
+
+<hr>
+
+<ul>
+    <li>IP: {{.host.Ip}}</li>
+    <li>Hostname: {{.host.Hostname}}</li>
+    <li>ASN: {{.host.Asn}}</li>
+    <li>Location: {{.host.City}}, {{.host.Region}}, {{.host.Country}}</li>
+    <li>Organization: {{.host.Org}}</li>
+    <li>Created at: {{.host.CreatedAt}}</li>
+    <li>Updated at: {{.host.UpdatedAt}}</li>
+    <li>
+        <form action="/admin/deleteHost" method="POST">
+            <input type="hidden" name="ip" value={{.host.Ip}}>
+            <input type="submit" value="Delete">
+        </form>
+    </li>
+</ul>
+
+{{range $s := .host.Services}}
+<div class="service" id="{{$s.Port}}">
+    <img src="/screenshots/{{$s.HostIp}}_{{$s.Port}}.jpeg">
+    <ul>
+        <li>Port: {{$s.Port}}</li>
+        <li>Name: {{$s.ClientName}}</li>
+        <li>Username: {{$s.Username}}</li>
+        <li>Password: {{$s.Password}}</li>
+        <li>Created at: {{$s.CreatedAt}}</li>
+        <li>Updated at: {{$s.UpdatedAt}}</li>
+        <li>
+            <form action="/api/addvnc" method="POST">
+                <input type="hidden" name="ip" value={{$s.HostIp}}>
+                <input type="hidden" name="port" value={{$s.Port}}>
+                <input type="hidden" name="username" value={{$s.Username}}>
+                <input type="hidden" name="password" value={{$s.Password}}>
+                <input type="submit" value="Refresh screenshot">
+            </form>
+        </li>
+        <li>
+            <form action="/admin/deleteService" method="POST">
+                <input type="hidden" name="ip" value={{$s.HostIp}}>
+                <input type="hidden" name="port" value={{$s.Port}}>
+                <input type="submit" value="Delete">
+            </form>
+        </li>
+        <li>
+            <a href="/novnc/vnc.html?path=websockify?token={{$s.HostIp}}:{{$s.Port}}&username={{$s.Username}}&password={{$s.Password}}">
+                Connect
+            </a>
+        </li>
+        <li>
+            <details>
+                <summary>OCR</summary>
+                <pre>{{$s.Text}}</pre>
+            </details>
+        </li>
+    </ul>
+</div>
+{{end}}
+
+{{template "footer"}}
