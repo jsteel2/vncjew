@@ -4,13 +4,13 @@ import (
 	"os/exec"
 )
 
-var limit = make(chan struct{}, CFGMaxConcurrentOCR)
-func acquire() { limit <- struct{}{} }
-func release() { <-limit }
+var oLimit = make(chan struct{}, CFGMaxConcurrentOCR)
+func oAcquire() { oLimit <- struct{}{} }
+func oRelease() { <-oLimit }
 
 func OCR(file string) string {
-	acquire()
-	defer release()
+	oAcquire()
+	defer oRelease()
 	text, _ := exec.Command(CFGTesseractBin, file, "stdout").Output()
 	return string(text)
 }

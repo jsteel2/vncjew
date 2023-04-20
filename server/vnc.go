@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -70,5 +71,24 @@ func VNCScreenshot(ip, port, username, password string) (*VNCInfo, error) {
 	return nil, errors.New("Could not screenshot VNC")
 }
 
-// TODO:
-// fix up deleting hosts/services
+var vLimit = make(chan struct{}, CFGMaxVNCConns)
+func vAcquire() { vLimit <- struct{}{} }
+func vRelease() { <-vLimit }
+
+func AddVNC(ip, port, username, password string, db *DB) error {
+	vAcquire()
+	info, err := VNCScreenshot(ip, port, username, password)
+	vRelease()
+	if err != nil {
+		log.Printf("%s:%s %s", ip, port, err.Error())
+		return err
+	}
+	ocr := OCR(fmt.Sprintf("./screenshots/%s_%s.jpeg", ip, port))
+	err = db.AddService(ip, port, ocr, info)
+	if err != nil {
+		log.Printf("%s:%s %s", ip, port, err.Error())
+		return err
+	}
+	log.Printf("%s:%s Added VNC Successfully!", ip, port)
+	return nil
+}

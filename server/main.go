@@ -2,11 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
 
 	"github.com/evangwt/go-vncproxy"
@@ -31,7 +29,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	wsServ := NewWSServ()
+	wsServ := NewWSServ(db)
 
 	admin := gin.BasicAuth(CFGAdminAccount)
 	client := gin.BasicAuth(CFGClientAccount)
@@ -97,29 +95,17 @@ func main() {
 	})
 
 	r.GET("/admin/status", admin, func(c *gin.Context) {
-		clients := wsServ.SendAll("status")
-		sort.Slice(clients, func(i, j int) bool {
-			return clients[i].RemoteAddr < clients[j].RemoteAddr
-		})
-
 		c.HTML(http.StatusOK, "admin_status.html", gin.H{
-			"clients": clients,
+			"clients": wsServ.SendStatus(),
 		})
 	})
 
-	r.POST("/admin/:cmd", admin, func(c *gin.Context) {
-		cmd := c.Param("cmd")
-		if cmd != "scan" && cmd != "stop" {
-			c.String(http.StatusInternalServerError, "Invalid command %s", cmd)
-			return
-		}
-		response, err := wsServ.Send(c.PostForm("client"), cmd + " " + c.PostForm("args"))
-		if err != nil {
-			errorMSG(c, err)
-			return
-		}
+	r.GET("/admin/start", admin, func(c *gin.Context) {
+		c.String(http.StatusOK, "%s", wsServ.SendStart())
+	})
 
-		c.String(http.StatusOK, "%s", response)
+	r.GET("/admin/stop", admin, func(c *gin.Context) {
+		c.String(http.StatusOK, "%s", wsServ.SendStop())
 	})
 
 	r.POST("/admin/deleteHost", admin, func(c *gin.Context) {
@@ -140,31 +126,14 @@ func main() {
 		c.String(http.StatusOK, "Successfully deleted service")
 	})
 
-	limit := make(chan struct{}, CFGMaxVNCConns)
-	acquire := func() { limit <- struct{}{} }
-	release := func() { <-limit }
-	r.POST("/api/addvnc", client, func(c *gin.Context) {
-		acquire()
-		ip := c.PostForm("ip")
-		port := c.PostForm("port")
-		username := c.PostForm("username")
-		password := c.PostForm("password")
-		info, err := VNCScreenshot(ip, port, username, password)
-		release()
+	r.POST("/admin/refresh", admin, func(c *gin.Context) {
+		err := AddVNC(c.PostForm("ip"), c.PostForm("port"),
+			c.PostForm("username"), c.PostForm("password"), db)
 		if err != nil {
 			errorMSG(c, err)
-			return
+		} else {
+			c.String(http.StatusOK, "Refreshed VNC successfully")
 		}
-
-		ocr := OCR(fmt.Sprintf("./screenshots/%s_%s.jpeg", ip, port))
-
-		err = db.AddService(ip, port, ocr, info)
-		if err != nil {
-			errorMSG(c, err)
-			return
-		}
-
-		c.String(http.StatusOK, "Added VNC successfully!")
 	})
 
 	r.GET("/api/database", func(c *gin.Context) {

@@ -52,7 +52,7 @@
         <li>Created at: {{$s.CreatedAt}}</li>
         <li>Updated at: {{$s.UpdatedAt}}</li>
         <li>
-            <form action="/api/addvnc" method="POST">
+            <form action="/admin/refresh" method="POST">
                 <input type="hidden" name="ip" value={{$s.HostIp}}>
                 <input type="hidden" name="port" value={{$s.Port}}>
                 <input type="hidden" name="username" value={{$s.Username}}>

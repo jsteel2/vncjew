@@ -6,88 +6,184 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"os/user"
-	"strings"
 	"strconv"
+	"strings"
 
 	"golang.org/x/net/websocket"
 )
 
-var masscanCmd *exec.Cmd
-var masscanStatus string
-var vncAddURL string
-var password string
-var defaultArgs = []string{"--open", "--open-only", "-p5900-5910",
-	"-oD", "/dev/stdout", "--banners", "--source-port", "31342",
-	"--exclude", "10.0.0.0/8", "--exclude", "172.16.0.0/12",
-	"--exclude", "192.168.0.0/16"}
+var ws *websocket.Conn
+var masscan *exec.Cmd
+var sourcePort = "31342"
+var defaultArgs = []string{
+	"--open", "--open-only", "-p5900-5910", "--banners",
+	"--source-port", sourcePort, "-oD", "/dev/stdout",
+	"--exclude", "0.0.0.0/8", "--exclude", "10.0.0.0/8",
+	"--exclude", "100.64.0.0/10", "--exclude", "127.0.0.0/8",
+	"--exclude", "169.254.0.0/16", "--exclude", "172.16.0.0/12",
+	"--exclude", "192.0.0.0/24", "--exclude", "192.0.0.0/29",
+	"--exclude", "192.0.0.170/32", "--exclude", "192.0.0.171/32",
+	"--exclude", "192.0.2.0/24", "--exclude", "192.88.99.0/24",
+	"--exclude", "192.168.0.0/16", "--exclude", "198.18.0.0/15",
+	"--exclude", "198.51.100.0/24", "--exclude", "203.0.113.0/24",
+	"--exclude", "240.0.0.0/4", "--exclude", "255.255.255.255/32",
+	"--rate", "100000", // Not sure how to adjust this man
+}
+var status = ""
+var server = "***REMOVED***"
+var password = "***REMOVED***"
+var started = false
 
 func main() {
 	user, err := user.Current()
 	if err != nil || user.Uid != "0" {
-		log.Fatal("Run as root!")
+		log.Fatalln("Run as root!")
 	}
 
-	if len(os.Args) < 3 {
-		log.Fatalf("Usage: %s <password> <server>", os.Args[0])
-	}
-	password = os.Args[1]
-
-	iptables := exec.Command("iptables", "-A", "INPUT", "-p", "tcp", "--dport", "31342", "-j", "DROP")
+	iptables := exec.Command("iptables", "-A", "INPUT", "-p", "tcp", "--dport", sourcePort, "-j", "DROP")
 	if err := iptables.Run(); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		log.Println("Please install iptables to work propery")
 	}
 
-	origin := &url.URL{Scheme: "http", Host: os.Args[2]}
-	_url := &url.URL{Scheme: "ws", Host: os.Args[2], Path: "/api/client"}
-	auth := base64.StdEncoding.EncodeToString([]byte("client:" + password))
-	vncAddURL = fmt.Sprintf("http://%s/api/addvnc", os.Args[2])
+	sec := "s"
+	if len(os.Args) > 1 && os.Args[1] == "http" {
+		sec = ""
+	}
 
-	ws, err := websocket.DialConfig(&websocket.Config{
-		Location: _url,
-		Origin: origin,
+	auth := base64.StdEncoding.EncodeToString([]byte("client:" + password))
+
+	ws, err = websocket.DialConfig(&websocket.Config{
+		Location: &url.URL{Scheme: "ws" + sec, Host: server, Path: "/api/client"},
+		Origin: &url.URL{Scheme: "https", Host: server},
 		Version: websocket.ProtocolVersionHybi13,
 		Header: http.Header{"Authorization": {"Basic " + auth}},
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
+	defer ws.Close()
+	log.Println("Connected")
 
-	msg := make([]byte, 1024)
 	for {
-		n, err := ws.Read(msg)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		split := strings.Fields(string(msg[:n]))
-		log.Println("Got", split)
-
-		if len(split) < 1 {
+		msg := readMSG()
+		if len(msg) < 1 {
 			continue
 		}
+		log.Println("Got", msg)
 
-		switch split[0] {
-		case "status": ws.Write([]byte(getStatus()))
-		case "scan": ws.Write([]byte(masscan(split[1:])))
-		case "stop": ws.Write([]byte(stop()))
+		switch msg[0] {
+		case "status": writeMSG("status", getStatus())
+		case "start": writeMSG("start", start())
+		case "stop": writeMSG("stop", stop())
+		case "range": go scanRange(msg[1])
+		case "vnc": log.Println(msg[1])
+		case "ping": writeMSG("pong")
 		}
 	}
 }
 
-func running() bool {
-	return masscanCmd != nil && masscanCmd.ProcessState == nil
+func start() string {
+	if started || running() {
+		return "Already started"
+	}
+	started = true
+	writeMSG("range")
+	return "Started successfully"
+}
+
+func stop() string {
+	if !running() {
+		return "Already stopped"
+	}
+	started = false
+	err := masscan.Process.Kill()
+	if err != nil {
+		return err.Error()
+	}
+	return "Stopped successfully"
+}
+
+func getStatus() string {
+	if running() {
+		return strings.TrimSpace(status)
+	}
+	return "Idling"
+}
+
+func scanRange(rnge string) {
+	if rnge == "stop" {
+		stop()
+		return
+	}
+	if running() {
+		log.Printf("Got range %s even though masscan still running", rnge)
+		return
+	}
+	if !started {
+		log.Printf("Got range %s even though should stop", rnge)
+		return
+	}
+	status = "Starting..."
+	masscan = exec.Command("masscan", append(defaultArgs, rnge)...)
+	stdout, err := masscan.StdoutPipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	stderr, err := masscan.StderrPipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = masscan.Start()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	go readStatus(stderr)
+	readVNCs(stdout)
+	masscan.Wait()
+	if started {
+		writeMSG("range")
+	}
+}
+
+func readStatus(from io.ReadCloser) {
+	scanner := bufio.NewScanner(from)
+	scanner.Split(scanStatus)
+	for scanner.Scan() {
+		status = scanner.Text()
+		fmt.Fprint(os.Stderr, status)
+	}
+}
+
+func scanStatus(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	if data[len(data) - 1] == '\n' {
+		return len(data), nil, nil
+	}
+
+	if data[len(data) - 1] == '\r' {
+		return len(data), data, nil
+	}
+
+	if atEOF {
+		return len(data), data, nil
+	}
+
+	return
 }
 
 func readVNCs(from io.ReadCloser) {
 	scanner := bufio.NewScanner(from)
-
 	for scanner.Scan() {
 		var data map[string]any
 		err := json.Unmarshal([]byte(scanner.Text()), &data)
@@ -100,114 +196,35 @@ func readVNCs(from io.ReadCloser) {
 			continue
 		}
 		log.Println("Putting in", data["ip"], data["port"])
-		v := url.Values{}
-		v.Set("ip", data["ip"].(string))
-		v.Set("port", strconv.Itoa(int(data["port"].(float64))))
-		r, err := http.NewRequest("POST", vncAddURL, strings.NewReader(v.Encode()))
-
-		if err != nil {
-			log.Println("Failed to POST VNC", err)
-			continue
-		}
-		r.SetBasicAuth("client", password)
-		r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		client := &http.Client{}
-		go func() {
-			res, err := client.Do(r)
-			if err != nil {
-				log.Println("Failed to POST VNC", err)
-				return
-			}
-			defer res.Body.Close()
-
-			body, err := ioutil.ReadAll(res.Body)
-			if err != nil {
-				log.Println("Failed to POST VNC", err)
-				return
-			}
-			fmt.Println("POST", data["ip"], data["port"], string(body))
-		}()
+		writeMSG("vnc", data["ip"].(string), strconv.Itoa(int(data["port"].(float64))))
 	}
 }
 
-func readStatus(from io.ReadCloser) {
-	scanner := bufio.NewScanner(from)
-	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		if atEOF && len(data) == 0 {
-			return 0, nil, nil
-		}
-
-		if data[len(data) - 1] == '\n' {
-			return len(data), nil, nil
-		}
-
-		if data[len(data) - 1] == '\r' {
-			return len(data), data, nil
-		}
-
-		if atEOF {
-			return len(data), data, nil
-		}
-
-		return
-	})
-
-	for scanner.Scan() {
-		masscanStatus = scanner.Text()
-	}
+func running() bool {
+	return masscan != nil && masscan.ProcessState == nil
 }
 
-func getStatus() string {
-	if !running() {
-		return "Idling"
-	}
-	return masscanStatus
-}
-
-func masscan(args []string) string {
-	if !running() {
-		os.Remove("./paused.conf")
-
-		masscanStatus = ""
-		args = append(defaultArgs, args...)
-		log.Println("started", args)
-		masscanCmd = exec.Command("masscan", args...)
-
-		stdout, err := masscanCmd.StdoutPipe()
-		if err != nil {
-			return "could not get stdout"
-		}
-
-		go readVNCs(stdout)
-
-		stderr, err := masscanCmd.StderrPipe()
-		if err != nil {
-			return "could not get stderr"
-		}
-
-		go readStatus(stderr)
-
-		err = masscanCmd.Start()
-		if err != nil {
-			return "could not start scan"
-		}
-
-		go func() {
-			masscanCmd.Wait()
-		}()
-
-		return "started new scan"
-	}
-	return "already scanning!"
-}
-
-func stop() string {
-	if !running() {
-		return "already stopped"
-	}
-	err := masscanCmd.Process.Kill()
+func readMSG() []string {
+	buf := make([]byte, 1024)
+	n, err := ws.Read(buf)
 	if err != nil {
-		return "could not stop scan"
+		log.Fatalln(err)
 	}
-	return "stopped scan"
+	var res []string
+	err = json.Unmarshal(buf[:n], &res)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return res
+}
+
+func writeMSG(msg ...string) {
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	_, err = ws.Write(b)
+	if err != nil {
+		log.Fatalln(err)
+	}
 }

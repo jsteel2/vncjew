@@ -7,17 +7,17 @@
 <ul>
 {{range $s := .clients}}
     <li>
-        {{$s.RemoteAddr}}: {{$s.Response}}
-        <form action="scan" method="POST">
+        {{$s.Client.Ip}}: {{$s.Response}}
+        <!--<form action="scan" method="POST">
             <label for="args">Args:</label>
             <input type="text" name="args">
-            <input type="hidden" name="client" value="{{$s.RemoteAddr}}">
+            <input type="hidden" name="client" value="{{$s.Client.Ip}}">
             <input type="submit" value="Scan">
         </form>
         <form action="stop" method="POST">
-            <input type="hidden" name="client" value="{{$s.RemoteAddr}}">
+            <input type="hidden" name="client" value="{{$s.Client.Ip}}">
             <input type="submit" value="Stop">
-        </form>
+        </form>-->
     </li>
 {{end}}
 </ul>
