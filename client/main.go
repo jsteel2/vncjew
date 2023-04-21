@@ -20,30 +20,43 @@ import (
 
 var ws *websocket.Conn
 var masscan *exec.Cmd
-var sourcePort = "31342"
+var sourcePort = "61234"
 var defaultArgs = []string{
 	"--open", "--open-only", "-p5900-5910", "--banners",
 	"--source-port", sourcePort, "-oD", "/dev/stdout",
 	"--exclude", "0.0.0.0/8", "--exclude", "10.0.0.0/8",
 	"--exclude", "100.64.0.0/10", "--exclude", "127.0.0.0/8",
 	"--exclude", "169.254.0.0/16", "--exclude", "172.16.0.0/12",
-	"--exclude", "192.0.0.0/24", "--exclude", "192.0.0.0/29",
-	"--exclude", "192.0.0.170/32", "--exclude", "192.0.0.171/32",
-	"--exclude", "192.0.2.0/24", "--exclude", "192.88.99.0/24",
-	"--exclude", "192.168.0.0/16", "--exclude", "198.18.0.0/15",
-	"--exclude", "198.51.100.0/24", "--exclude", "203.0.113.0/24",
-	"--exclude", "240.0.0.0/4", "--exclude", "255.255.255.255/32",
-	"--rate", "100000", // Not sure how to adjust this man
+	"--exclude", "192.0.0.0/24", "--exclude", "192.0.2.0/24",
+	"--exclude", "192.88.99.0/24", "--exclude", "192.168.0.0/16",
+	"--exclude", "192.18.0.0/15", "--exclude", "198.51.100.0/24",
+	"--exclude", "203.0.113.0/24", "--exclude", "224.0.0.0/4",
+	"--exclude", "233.252.0.0/24", "--exclude", "240.0.0.0/4",
+	"--exclude", "255.255.255.255/32",
+	"--exclude", "6.0.0.0/7", "--exclude", "9.0.0.0/8",
+	"--exclude", "10.0.0.0/7", "--exclude", "19.0.0.0/8",
+	"--exclude", "21.0.0.0/7", "--exclude", "25.0.0.0/7",
+	"--exclude", "28.0.0.0/8", "--exclude", "29.0.0.0/7",
+	"--exclude", "33.0.0.0/8", "--exclude", "48.0.0.0/8",
+	"--exclude", "53.0.0.0/8", "--exclude", "55.0.0.0/7",
+	"--exclude", "214.0.0.0/7",
 }
 var status = ""
 var server = "***REMOVED***"
 var password = "***REMOVED***"
 var started = false
+var rate = ""
 
 func main() {
 	user, err := user.Current()
 	if err != nil || user.Uid != "0" {
 		log.Fatalln("Run as root!")
+	}
+
+	if len(os.Args) > 1 {
+		rate = os.Args[1]
+	} else {
+		rate = "100000"
 	}
 
 	iptables := exec.Command("iptables", "-A", "INPUT", "-p", "tcp", "--dport", sourcePort, "-j", "DROP")
@@ -53,7 +66,7 @@ func main() {
 	}
 
 	sec := "s"
-	if len(os.Args) > 1 && os.Args[1] == "http" {
+	if len(os.Args) > 2 && os.Args[2] == "http" {
 		sec = ""
 	}
 
@@ -131,7 +144,9 @@ func scanRange(rnge string) {
 		return
 	}
 	status = "Starting..."
-	masscan = exec.Command("masscan", append(defaultArgs, rnge)...)
+	args := append(defaultArgs, "--rate", rate, rnge)
+	log.Println("Running masscan with args", args)
+	masscan = exec.Command("masscan", args...)
 	stdout, err := masscan.StdoutPipe()
 	if err != nil {
 		log.Fatalln(err)
