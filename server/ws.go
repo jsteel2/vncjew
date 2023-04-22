@@ -25,6 +25,7 @@ type WSServ struct {
 	Clients map[*Client]struct{}
 	RangeChan chan int
 	Db *DB
+	Started bool
 }
 
 type Response struct {
@@ -46,6 +47,7 @@ func NewWSServ(db *DB) *WSServ {
 	return &WSServ{
 		Clients: make(map[*Client]struct{}),
 		Db: db,
+		Started: false,
 	}
 }
 
@@ -115,11 +117,13 @@ func (s *WSServ) SendStatus() ([]Response) {
 }
 
 func (s *WSServ) SendStart() ([]Response) {
+	s.Started = true
 	s.InitRanges()
 	return s.Send(sendStart)
 }
 
 func (s *WSServ) SendStop() ([]Response) {
+	s.Started = false
 	return s.Send(sendStop)
 }
 
@@ -139,8 +143,11 @@ func (s *WSServ) InitRanges() {
 
 func (s *WSServ) SendRange(c *Client) error {
 	select {
-	case x := <-s.RangeChan: return c.WriteMSG("range", fmt.Sprintf("%d.0.0.0/8", x))
-	default: return c.WriteMSG("range", "stop")
+	case x := <-s.RangeChan:
+		return c.WriteMSG("range", fmt.Sprintf("%d.0.0.0/8", x))
+	default:
+		s.Started = false
+		return c.WriteMSG("range", "stop")
 	}
 }
 
@@ -170,6 +177,10 @@ func (s *WSServ) ServeWS(ws *websocket.Conn) {
 		close(client.StopChan)
 		delete(s.Clients, client)
 	}()
+
+	if s.Started {
+		go sendStart(client)
+	}
 
 	go func() {
 		for {
