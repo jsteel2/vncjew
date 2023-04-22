@@ -179,7 +179,9 @@ func readStatus(from io.ReadCloser) {
 	for scanner.Scan() {
 		status = scanner.Text()
 		if r.MatchString(status) {
-			stop()
+			if running() {
+				masscan.Process.Kill()
+			}
 			break
 		}
 		fmt.Fprint(os.Stderr, status)
