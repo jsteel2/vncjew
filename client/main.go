@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -171,8 +172,16 @@ func scanRange(rnge string) {
 func readStatus(from io.ReadCloser) {
 	scanner := bufio.NewScanner(from)
 	scanner.Split(scanStatus)
+	r, err := regexp.Compile(`waiting -[0-9]+-secs`)
+	if err != nil {
+		log.Fatalln(err)
+	}
 	for scanner.Scan() {
 		status = scanner.Text()
+		if r.MatchString(status) {
+			stop()
+			break
+		}
 		fmt.Fprint(os.Stderr, status)
 	}
 }
