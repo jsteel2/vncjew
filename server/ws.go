@@ -143,8 +143,12 @@ func (s *WSServ) InitRanges() {
 
 func (s *WSServ) SendRange(c *Client) error {
 	select {
-	case x := <-s.RangeChan:
-		return c.WriteMSG("range", fmt.Sprintf("%d.0.0.0/8", x))
+	case x, ok := <-s.RangeChan:
+		if ok {
+			return c.WriteMSG("range", fmt.Sprintf("%d.0.0.0/8", x))
+		}
+		s.Started = false
+		return c.WriteMSG("range", "stop")
 	default:
 		s.Started = false
 		return c.WriteMSG("range", "stop")
