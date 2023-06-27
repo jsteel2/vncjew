@@ -1,5 +1,9 @@
 {{template "header"}}
 
+<meta property="og:image" content="/screenshots/{{.host.Ip}}_{{(index .host.Services 0).Port}}.jpeg"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:image:src" content="/screenshots/{{.host.Ip}}_{{(index .host.Services 0).Port}}.jpeg"/>
+
 <title>{{.host.Ip}} - VNCJew</title>
 <style>
  .service {
