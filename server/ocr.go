@@ -37,6 +37,10 @@ func googleOCR(file string) (string, error) {
 		return "", err
 	}
 
+	if len(annotations) == 0 {
+		return "", nil
+	}
+
 	return annotations[0].Description, nil
 }
 
