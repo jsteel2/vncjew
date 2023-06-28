@@ -68,7 +68,7 @@ var sqlLexer = lexer.MustSimple([]lexer.SimpleRule{
 		`|host\.region|host\.hostname|host\.created_at|host\.updated_at` +
 		`|username|password|text|client_name|port|services\.created_at` +
 		`|services\.updated_at|width|height` +
-		`|BETWEEN|ORDER|NULL|LIKE|ASC|DESC|NOT|AND|OR|BY|IS|>=|<=|=|<>|<|>`},
+		`|BETWEEN|ORDER|NULL|LIKE|ASC|DESC|NOT|AND|OR|BY|IS|RANDOM\(\)|>=|<=|=|<>|<|>`},
 	{"String", `"(\\"|[^"])*"`},
 	{"whitespace", `[ \t\r\n]+`},
 })
