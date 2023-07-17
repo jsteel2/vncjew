@@ -113,10 +113,10 @@ func start() string {
 }
 
 func stop() string {
+	started = false
 	if !running() {
 		return "Already stopped"
 	}
-	started = false
 	err := masscan.Process.Kill()
 	if err != nil {
 		return err.Error()
