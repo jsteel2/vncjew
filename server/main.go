@@ -82,6 +82,25 @@ func main() {
 		})
 	})
 
+	r.GET("/api/search", func(c *gin.Context) {
+		offset, _ := strconv.Atoi(c.Query("offset"))
+		if offset < 0 {
+			offset = 0
+		}
+		amt, _ := strconv.Atoi(c.Query("amt"))
+		if amt <= 0 {
+			amt = 25
+		}
+
+		services, err := db.Search(c.Query("query"), offset, amt)
+		if err != nil {
+			errorMSG(c, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, services)
+	})
+
 	r.GET("/host/:ip", func(c *gin.Context) {
 		host, err := db.GetHost(c.Param("ip"))
 		if err != nil {
